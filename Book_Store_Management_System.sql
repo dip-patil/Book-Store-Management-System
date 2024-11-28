@@ -88,6 +88,16 @@ CREATE TABLE Addresses (
     country NVARCHAR(100) NOT NULL,
     FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
 );
+
+CREATE TABLE Images (
+    image_id INT PRIMARY KEY IDENTITY(1,1), 
+    book_id INT NOT NULL,                   
+    image_data VARBINARY(MAX) NULL,         
+    image_url NVARCHAR(MAX) NULL,          
+    created_at DATETIME DEFAULT GETDATE(), 
+    FOREIGN KEY (book_id) REFERENCES Books(book_id) ON DELETE CASCADE
+	);
+
 CREATE TABLE AuditLog (
     log_id INT PRIMARY KEY IDENTITY(1,1),
     user_id INT,
@@ -433,6 +443,40 @@ BEGIN
     END CATCH
 END;
 
+CREATE OR ALTER PROCEDURE AddBookImage
+    @book_id INT,
+    @image_data VARBINARY(MAX)  Null,
+    @image_url NVARCHAR(MAX)  NULL
+AS
+BEGIN
+    BEGIN TRY
+        IF @image_data IS NULL AND @image_url IS NULL
+        BEGIN
+            THROW 51000, 'At least one of image_data or image_url must be provided.', 1;
+        END;
+	
+        INSERT INTO Images (book_id, image_data, image_url)
+        VALUES (@book_id, @image_data, @image_url);
+    END TRY
+    BEGIN CATCH
+        THROW;
+    END CATCH
+END;
+
+
+DECLARE @binary_data VARBINARY(MAX);
+SET @binary_data = (Select * from OpenRowSet(Bulk 'C:\Users\HP\Documents\SQL Server Management Studio\Book Store Management System\book.jpg',Single_Blob) as T); 
+
+EXEC AddBookImage @book_id = 1, @image_data = @binary_data, @image_url = 'https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.gettyimages.in%2Fphotos%2Fbook&psig=AOvVaw3XfLynZy84JUpXOGp6rdMe&ust=1732796719824000&source=images&cd=vfe&opi=89978449&ved=0CBEQjRxqFwoTCKiC7_nA_IkDFQAAAAAdAAAAABAE';
+EXEC AddBookImage @book_id = 1, @image_data = NULL, @image_url = 'https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.gettyimages.in%2Fphotos%2Fbook&psig=AOvVaw3XfLynZy84JUpXOGp6rdMe&ust=1732796719824000&source=images&cd=vfe&opi=89978449&ved=0CBEQjRxqFwoTCKiC7_nA_IkDFQAAAAAdAAAAABAE';
+
+SELECT 
+    i.image_id, 
+    i.image_data, 
+    i.image_url, 
+    i.created_at
+FROM Images i
+WHERE i.book_id = 1;
 
 
 
@@ -576,6 +620,20 @@ EXEC PlaceOrder @user_id = 2;
 EXEC ViewOrderDetails @user_id = 2;
 
 
+BACKUP DATABASE Book_Store_Management
+TO DISK = 'D:\SQL_Backups\BookStore_FullBackup.bak'
+WITH FORMAT, NAME = 'Full Backup of Book Store Management';
+
+CREATE DATABASE Book_Store_Management_Snapshot ON 
+(NAME = 'Book_Store_Management', FILENAME = 'D:\SQL_Snapshots\Book_Store_Snapshot.ss')
+AS SNAPSHOT OF Book_Store_Management;
+
+Drop table Images;
+
+use master;
+
+RESTORE DATABASE Book_Store_Management 
+FROM DATABASE_SNAPSHOT = 'Book_Store_Management_Snapshot';
 
 Select * from Orders;
 select * from carts;
